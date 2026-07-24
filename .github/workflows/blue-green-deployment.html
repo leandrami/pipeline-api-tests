@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blue-Green Deployment</title>
+<style>
+  :root{
+    --bg:#050b16;
+    --bg-deep:#03060d;
+    --panel:#0d1830;
+    --panel-2:#0a1424;
+    --line:#1c2c4a;
+    --blue:#2f7cf6;
+    --blue-deep:#1a4fb5;
+    --green:#22c58e;
+    --green-deep:#12965f;
+    --teal:#1b8f9e;
+    --text:#eef3fb;
+    --muted:#8ea0bf;
+    --eyebrow:#5a79ac;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--bg-deep);font-family:'Segoe UI',Arial,sans-serif;color:var(--text);overflow:hidden;}
+
+  .deck{position:relative;width:100vw;height:100vh;}
+  .slide{
+    position:absolute;inset:0;
+    display:none;
+    background:var(--bg);
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:64px 64px;
+    background-position:-1px -1px;
+  }
+  .slide.active{display:block;}
+
+  /* ---------- shared chrome ---------- */
+  .frame{position:relative;width:100%;height:100%;padding:44px 64px 56px;}
+  .topline{display:flex;justify-content:space-between;align-items:flex-start;}
+  .mark{display:flex;align-items:center;gap:10px;}
+  .mark .dot{width:11px;height:11px;border-radius:50%;background:var(--blue);position:relative;}
+  .mark .dot::after{content:"";position:absolute;left:9px;top:0;width:11px;height:11px;border-radius:50%;background:var(--green);}
+  .mark .word{font-size:clamp(38px,1.5vw,52px);font-weight:700;letter-spacing:1.5px;}
+  .mark .word b{color:var(--blue);}
+  .mark .word i{color:var(--green);font-style:normal;}
+  .mark .tag{font-size:clamp(13px,1vw,25px);color:var(--muted);letter-spacing:1px;margin-top:4px;}
+  .pageof{font-size:clamp(14px,1.1vw,16px);color:var(--eyebrow);letter-spacing:1px;text-align:right;}
+  .pageof .n{color:var(--text);font-weight:700;}
+
+  .banner{
+    position:absolute;top:0;right:0;
+    width:58%;height:190px;
+    border-radius:0 0 0 220px;
+    background:linear-gradient(120deg,var(--teal) 0%,var(--blue) 55%,var(--green) 100%);
+    display:flex;align-items:center;justify-content:flex-end;
+    padding:0 72px 26px 140px;
+  }
+  .banner h1{
+    margin:0;font-size:clamp(34px,3.2vw,46px);font-weight:700;letter-spacing:2px;text-transform:uppercase;
+    color:#04101f;text-align:right;
+  }
+
+  .divider{display:flex;align-items:center;gap:12px;margin:30px 0 28px;}
+  .divider .bar{width:42px;height:6px;background:var(--green);border-radius:2px;}
+  .divider .rule{flex:1;height:1px;background:var(--line);}
+
+  .body-grid{display:grid;grid-template-columns:800px 1fr;gap:64px;margin-top:170px;align-items:start;}
+  .lead p{font-size:clamp(20px,1.7vw,34px);line-height:1.65;color:var(--muted);margin:0 0 20px;}
+  .lead p b{color:var(--text);font-weight:600;}
+
+  .content{min-height:0;}
+
+  .footer-badge{position:absolute;bottom:28px;left:64px;font-size:11px;color:var(--eyebrow);letter-spacing:1px;}
+
+  /* ---------- cover slide ---------- */
+  .cover{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;position:relative;}
+  .cover .ring{width:120px;height:120px;position:relative;margin-bottom:34px;}
+  .cover .ring .c{position:absolute;width:74px;height:74px;border-radius:50%;top:23px;}
+  .cover .ring .c1{left:6px;border:3px solid var(--blue);}
+  .cover .ring .c2{right:6px;border:3px solid var(--green);}
+  .cover .ring .swap{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:20px;color:var(--text);}
+  .cover h1{font-size:clamp(56px,6vw,84px);margin:0;font-weight:800;letter-spacing:3px;
+    background:linear-gradient(100deg,var(--blue),var(--green));-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .cover .sub{font-size:clamp(18px,1.6vw,22px);color:var(--muted);letter-spacing:3px;text-transform:uppercase;margin-top:20px;}
+  .cover .halo{position:absolute;width:520px;height:520px;border-radius:50%;
+    background:radial-gradient(circle,rgba(47,124,246,0.16),transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);}
+  .corner-circle{position:absolute;width:150px;height:150px;border-radius:50%;}
+  .cc-top{background:var(--green);top:-75px;left:60px;}
+  .cc-bottom{background:var(--blue);bottom:-75px;right:60px;}
+
+  /* ---------- cards ---------- */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:30px 32px;}
+  .card h3{margin:0 0 12px;font-size:clamp(24px,2vw,28px);font-weight:700;letter-spacing:.3px;color:var(--text);}
+  .card p{margin:0;font-size:clamp(17px,1.4vw,29px);line-height:1.6;color:var(--muted);}
+
+  .req-grid{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:200px;gap:24px;}
+  .req-grid .card{display:flex;flex-direction:column;justify-content:center;border-left:4px solid var(--blue);border-radius:0 14px 14px 0;}
+  .req-grid .card:nth-child(2){border-left-color:var(--green);}
+  .req-grid .card:nth-child(3){border-left-color:var(--teal);}
+  .req-grid .card:nth-child(4){border-left-color:var(--green);}
+
+  .compare{display:flex;gap:32px;}
+  .env-card{flex:1;border-radius:14px;border:1px solid var(--line);background:var(--panel);padding:36px 38px;display:flex;flex-direction:column;}
+  .env-card .env-label{font-size:clamp(15px,1.3vw,17px);letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;}
+  .env-card .env-name{font-size:clamp(36px,3.4vw,44px);font-weight:700;margin-bottom:22px;}
+  .env-card.blue{border-top:4px solid var(--blue);}
+  .env-card.blue .env-name{color:var(--blue);}
+  .env-card.green{border-top:4px solid var(--green);}
+  .env-card.green .env-name{color:var(--green);}
+  .env-card ul{margin:0;padding-left:22px;font-size:clamp(17px,1.4vw,29px);line-height:1.9;color:var(--muted);}
+  .note{margin-top:28px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:18px 22px;font-size:clamp(15px,1.3vw,17px);color:var(--muted);}
+  .note b{color:var(--green);}
+
+  /* diagram */
+  .diagram{display:flex;flex-direction:column;align-items:center;gap:0;padding:16px 0 4px;}
+  .dbox{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:20px 38px;font-size:clamp(18px,1.6vw,21px);text-align:center;}
+  .arrow-v{width:1px;height:34px;background:var(--eyebrow);position:relative;}
+  .arrow-v::after{content:"";position:absolute;bottom:-1px;left:-4px;border:5px solid transparent;border-top-color:var(--eyebrow);}
+  .split{display:flex;gap:110px;margin-top:0;}
+  .split .dbox.blue{border-color:var(--blue);color:var(--blue);font-weight:700;}
+  .split .dbox.green{border-color:var(--green);color:var(--green);font-weight:700;}
+
+  .steps{display:flex;gap:24px;margin-top:40px;}
+  .step{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:24px 26px;}
+  .step .num{font-size:clamp(15px,1.3vw,17px);color:var(--eyebrow);letter-spacing:1px;margin-bottom:10px;font-weight:700;}
+  .step p{margin:0;font-size:clamp(16px,1.4vw,18px);color:var(--muted);line-height:1.55;}
+
+  .concl{display:flex;flex-direction:column;gap:28px;}
+  .concl .card p{font-size:clamp(17px,1.4vw,29px);}
+  .highlight{border:1px solid var(--green);background:linear-gradient(120deg,rgba(34,197,142,.10),rgba(47,124,246,.08));border-radius:14px;padding:32px 34px;}
+  .highlight h3{color:var(--green);margin:0 0 12px;font-size:clamp(21px,1.8vw,24px);}
+  .highlight p{margin:0;font-size:clamp(18px,1.6vw,21px);line-height:1.65;color:var(--text);}
+
+  ul.plain{margin:0;padding-left:22px;font-size:clamp(18px,1.6vw,21px);line-height:1.9;color:var(--muted);}
+  ul.plain li b{color:var(--text);}
+
+  /* ---------- nav ---------- */
+  .nav{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center;z-index:10;}
+  .nav button{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:15px;cursor:pointer;}
+  .nav button:hover{border-color:var(--blue);}
+  .dots{display:flex;gap:7px;margin:0 6px;}
+  .dots span{width:7px;height:7px;border-radius:50%;background:var(--line);}
+  .dots span.on{background:var(--green);}
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <section class="slide active">
+    <div class="cover">
+      <div class="halo"></div>
+      <div class="corner-circle cc-top"></div>
+      <div class="corner-circle cc-bottom"></div>
+      <div class="ring">
+        <div class="c c1"></div>
+        <div class="c c2"></div>
+        <div class="swap">⇄</div>
+      </div>
+      <h1>BLUE&#8209;GREEN&nbsp;DEPLOYMENT</h1>
+      <div class="sub">Estratégia de implantação sem downtime</div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="frame">
+      <div class="topline">
+        <div class="mark">
+          <div>
+            <div class="word"><b>BLUE</b><i>-GREEN</i></div>
+            <div class="tag">zero-downtime releases</div>
+          </div>
+        </div>
+        <div class="pageof">Guia de Implantação · <span class="n">2</span>/5</div>
+      </div>
+      <div class="banner"><h1>Cenário</h1></div>
+      <div class="body-grid">
+        <div class="lead">
+          <p>Sistema de pedidos em <b>tempo real</b>, com uma migração estrutural do banco de dados que precisa ser feita sem impactar quem está comprando agora.</p>
+          <div class="divider"><div class="bar"></div><div class="rule"></div></div>
+          <p>O objetivo é simples de descrever e difícil de garantir: preservar a integridade dos dados e evitar qualquer janela de indisponibilidade perceptível.</p>
+        </div>
+        <div class="content req-grid">
+          <div class="card"><h3>Sistema</h3><p>Pedidos em tempo real, com escrita contínua no banco.</p></div>
+          <div class="card"><h3>Mudança</h3><p>Migração estrutural do schema do banco de dados.</p></div>
+          <div class="card"><h3>Rollback</h3><p>Obrigatório em menos de 10 segundos, sem intervenção manual.</p></div>
+          <div class="card"><h3>Objetivo</h3><p>Integridade dos dados e disponibilidade contínua.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="frame">
+      <div class="topline">
+        <div class="mark">
+          <div>
+            <div class="word"><b>BLUE</b><i>-GREEN</i></div>
+            <div class="tag">zero-downtime releases</div>
+          </div>
+        </div>
+        <div class="pageof">Guia de Implantação · <span class="n">3</span>/5</div>
+      </div>
+      <div class="banner"><h1>Por que Blue&#8209;Green</h1></div>
+      <div class="body-grid">
+        <div class="lead">
+          <p>Dois ambientes idênticos de produção, um ativo e um em espera, permitem trocar 100% do tráfego de uma vez, sem período misto.</p>
+          <div class="divider"><div class="bar"></div><div class="rule"></div></div>
+          <p><b>Canary foi descartado</b>: as duas versões acessariam o mesmo banco ao mesmo tempo durante a migração, aumentando o risco de corrupção dos dados.</p>
+        </div>
+        <div class="content compare">
+          <div class="env-card blue">
+            <div class="env-label">Ambiente ativo</div>
+            <div class="env-name">Blue</div>
+            <ul><li>Versão atual em produção</li><li>Recebe 100% do tráfego</li><li>Schema anterior do banco</li><li>Fica de prontidão para rollback</li></ul>
+          </div>
+          <div class="env-card green">
+            <div class="env-label">Ambiente novo</div>
+            <div class="env-name">Green</div>
+            <ul><li>Nova versão + novo schema</li><li>Validado antes do corte</li><li>Recebe tráfego só após validação</li><li>Vira o novo ambiente ativo</li></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="frame">
+      <div class="topline">
+        <div class="mark">
+          <div>
+            <div class="word"><b>BLUE</b><i>-GREEN</i></div>
+            <div class="tag">zero-downtime releases</div>
+          </div>
+        </div>
+        <div class="pageof">Guia de Implantação · <span class="n">4</span>/5</div>
+      </div>
+      <div class="banner"><h1>Plano de Implementação</h1></div>
+      <div class="body-grid">
+        <div class="lead">
+          <p>O tráfego é roteado por um único ponto de entrada, que decide qual ambiente está ativo. A troca acontece nesse ponto, não dentro da aplicação.</p>
+          <div class="divider"><div class="bar"></div><div class="rule"></div></div>
+          <p>Isso garante uma transição <b>tudo ou nada</b>: nunca há dois ambientes recebendo tráfego simultâneo.</p>
+        </div>
+        <div class="content">
+          <div class="diagram">
+            <div class="dbox">Usuários</div>
+            <div class="arrow-v"></div>
+            <div class="dbox">API Gateway / Load Balancer</div>
+            <div class="arrow-v"></div>
+            <div class="split">
+              <div class="dbox blue">Blue</div>
+              <div class="dbox green">Green</div>
+            </div>
+          </div>
+          <div class="steps">
+            <div class="step"><div class="num">01</div><p>Implantar a nova versão no ambiente Green.</p></div>
+            <div class="step"><div class="num">02</div><p>Validar API, logs e integridade do banco.</p></div>
+            <div class="step"><div class="num">03</div><p>Redirecionar todo o tráfego para o Green.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="frame">
+      <div class="topline">
+        <div class="mark">
+          <div>
+            <div class="word"><b>BLUE</b><i>-GREEN</i></div>
+            <div class="tag">zero-downtime releases</div>
+          </div>
+        </div>
+        <div class="pageof">Guia de Implantação · <span class="n">5</span>/5</div>
+      </div>
+      <div class="banner"><h1>Rollback &amp; Conclusão</h1></div>
+      <div class="body-grid">
+        <div class="lead">
+          <p>Se algo falhar após o corte, a resposta precisa ser imediata, não uma nova implantação.</p>
+          <div class="divider"><div class="bar"></div><div class="rule"></div></div>
+          <p>Como o ambiente Blue permanece de prontidão, o retorno é apenas uma troca de rota.</p>
+        </div>
+        <div class="content concl">
+          <ul class="plain">
+            <li><b>Falha detectada</b> → o tráfego retorna imediatamente ao ambiente Blue.</li>
+            <li><b>Rollback</b> em menos de 10 segundos, sem reprocessar implantação.</li>
+            <li><b>Resultado</b>: maior disponibilidade, segurança e integridade dos dados.</li>
+          </ul>
+          <div class="highlight">
+            <h3>Conclusão</h3>
+            <p>O Blue-Green Deployment atende ao cenário por permitir uma transição tudo ou nada, reduzindo riscos e garantindo recuperação rápida — sem expor o banco a duas versões simultâneas.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div class="nav">
+  <button onclick="prev()" aria-label="Anterior">◀</button>
+  <div class="dots" id="dots"></div>
+  <button onclick="next()" aria-label="Próximo">▶</button>
+</div>
+
+<script>
+let i = 0;
+const s = [...document.querySelectorAll('.slide')];
+const dotsEl = document.getElementById('dots');
+s.forEach((_, n) => {
+  const d = document.createElement('span');
+  if (n === 0) d.classList.add('on');
+  dotsEl.appendChild(d);
+});
+const dots = [...dotsEl.children];
+function show(){
+  s.forEach((e, n) => e.classList.toggle('active', n === i));
+  dots.forEach((d, n) => d.classList.toggle('on', n === i));
+}
+function next(){ if (i < s.length - 1) i++; show(); }
+function prev(){ if (i > 0) i--; show(); }
+document.onkeydown = e => {
+  if (e.key === 'ArrowRight') next();
+  if (e.key === 'ArrowLeft') prev();
+};
+show();
+</script>
+</body>
+</html>
