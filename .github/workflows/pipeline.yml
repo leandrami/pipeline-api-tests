@@ -1,20 +1,21 @@
-name: Pipeline CI - Nexus API
+name: Nexus API CI/CD
 
 on:
   push:
     branches:
       - main
-      - develop
   pull_request:
     branches:
       - main
 
 jobs:
-  ci:
+
+  build:
+    name: Build
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout do repositório
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Configurar Node.js
@@ -23,7 +24,25 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Instalar dependências
+      - name: Instalar Dependências
+        run: npm install
+
+  test:
+    name: Testes da API
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar Dependências
         run: npm install
 
       - name: Iniciar API
@@ -31,10 +50,22 @@ jobs:
           npm start &
           sleep 10
 
-      - name: Testar Health Check
+      - name: Smoke Test
         run: |
           curl --fail http://localhost:3000/api/health
 
-      - name: Encerrar aplicação
+      - name: Encerrar API
+        if: always()
         run: |
-          pkill node
+          pkill node || true
+
+  deploy:
+    name: Deploy
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Simulação de Deploy
+        run: |
+          echo "Todos os testes foram aprovados."
+          echo "Aplicação pronta para implantação."
